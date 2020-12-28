@@ -1,0 +1,28 @@
+{
+  "name": "my-home-automation",
+  "version": "1.0.0",
+  "description": "Some scripts I use to control my home",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "watch": "nodemon -V -i dataStore.json",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nytamin/my-home-automation.git"
+  },
+  "author": "Johan Nyman <johan@nytamin.se>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nytamin/my-home-automation/issues"
+  },
+  "homepage": "https://github.com/nytamin/my-home-automation#readme",
+  "dependencies": {
+    "cron": "^1.8.2",
+    "fast-clone": "^1.5.13",
+    "html-extract-data": "^1.0.1",
+    "node-fetch": "^2.6.1",
+    "xml-js": "^1.6.11"
+  }
+}

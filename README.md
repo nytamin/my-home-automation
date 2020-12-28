@@ -1,2 +1,6 @@
 # my-home-automation
-Some scripts I use to control my home
+These are some scripts I fiddled around with, controlling my heater at home.
+
+# Contributions / Development
+Don't expect any support, issue replies, PR merging, or further development.. :)
+
