@@ -268,28 +268,30 @@ function summarize (sim) {
 }
 function turnOnHeaterSomeTime(preparation, simulation, conditions) {
 
-    let lowestElectricalPrise = Number.POSITIVE_INFINITY
-    let lowestElectricalPrisetimeStr = null
+    let lowestCost = Number.POSITIVE_INFINITY
+    let lowestCostTimeStr = null
     for (const timeStr of Object.keys(preparation)) {
         const o = preparation[timeStr]
         const sim = simulation[timeStr]
 
         if (
             o.heaterOn < 1 &&
-            o.electricalPrice !== null &&
             conditions.allowHeaterOn(timeStr, sim)
         ) {
-            if (o.electricalPrice < lowestElectricalPrise) {
-                const factor = (conditions.preferFactor && conditions.preferFactor(timeStr, sim)) || 1
-                const cost = o.electricalPrice * factor
-                lowestElectricalPrise = cost
-                lowestElectricalPrisetimeStr = timeStr
+            const factor = (conditions.preferFactor && conditions.preferFactor(timeStr, sim)) || 1
+            let cost = o.electricalPrice
+            if (!cost) cost = 9999 + sim.sensiboTemperature
+
+            cost *= factor
+            if (cost < lowestCost) {
+                lowestCost = cost
+                lowestCostTimeStr = timeStr
             }
         }
 
     }
-    if (lowestElectricalPrisetimeStr) {
-        preparation[lowestElectricalPrisetimeStr].heaterOn += 0.25
+    if (lowestCostTimeStr) {
+        preparation[lowestCostTimeStr].heaterOn += 0.25
 
         return true
     } else {

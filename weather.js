@@ -27,9 +27,7 @@ async function getWeather () {
 
     const xmlText = await (await fetch(url)).text()
 
-
     const xmlRoot = xmlJs.xml2js(xmlText, {compact: false});
-    console.log(xmlRoot)
 
     const weatherPoints = []
 
