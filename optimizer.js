@@ -6,12 +6,16 @@ exports.optimizeHeater = function () {
     const conditions = {
 
         minSensiboTemperature: 20,
-        maxSensiboTemperature: 23,
+        maxDaySensiboTemperature: 22,
+        maxNightSensiboTemperature: 24,
         allowHeaterOn: (timeStr, sim) => {
             return (
-                new Date(timeStr).getHours() >= 22 ||
-                new Date(timeStr).getHours() < 6 ||
-                sim.sensiboTemperature < conditions.maxSensiboTemperature
+                (
+                    new Date(timeStr).getHours() >= 22 ||
+                    new Date(timeStr).getHours() < 5 ||
+                    sim.sensiboTemperature < conditions.maxDaySensiboTemperature
+                ) &&
+                sim.sensiboTemperature < conditions.maxNightSensiboTemperature
             )
         },
         preferFactor: (timeStr, sim) => {
@@ -28,7 +32,7 @@ exports.optimizeHeater = function () {
     }
 
     const currentHour = new Date()
-    // currentHour.setHours(0) // tmp!
+    // currentHour.setHours(1) // tmp!
     currentHour.setMinutes(0)
     currentHour.setSeconds(0)
     currentHour.setMilliseconds(0)
@@ -280,7 +284,7 @@ function turnOnHeaterSomeTime(preparation, simulation, conditions) {
         ) {
             const factor = (conditions.preferFactor && conditions.preferFactor(timeStr, sim)) || 1
             let cost = o.electricalPrice
-            if (!cost) cost = 9999 + sim.sensiboTemperature
+            if (cost === null) cost = 9999 + sim.sensiboTemperature
 
             cost *= factor
             if (cost < lowestCost) {

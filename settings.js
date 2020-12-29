@@ -14,4 +14,8 @@ exports.sensibo = {
     apiKey: '', // Sensibo API key
     deviceId: null // sensibo device
 }
+exports.easee = {
+    username: '', // tel-nr (ex: +467123456789)
+    password: ''
+}
 exports.enableActions = true

@@ -15,10 +15,15 @@ exports.updateWeather = async function () {
 
         const forecasts = await getWeather()
         store.weather.lastUpdated = Date.now()
-        store.weather.forecasts = forecasts
-        // for (const key of Object.keys(forecasts)) {
-        //     store.weather.forecasts[key] = forecasts[key]
-        // }
+        for (const key of Object.keys(forecasts)) {
+            store.weather.forecasts[key] = forecasts[key]
+        }
+        // remove old:
+        for (const timeStr of Object.keys(store.weather.forecasts)) {
+            if (Date.now() - new Date(timeStr).getTime() > 24 * 3600 * 1000 ) {
+                delete store.weather.forecasts[timeStr]
+            }
+        }
     }
 }
 async function getWeather () {

@@ -5,6 +5,7 @@ const { updateWeather } = require('./weather')
 const { updateSensiboTemperature } = require('./sensibo')
 const { optimizeHeater } = require('./optimizer')
 const { executeHeater } = require('./execute')
+const { updateEaseeStatus } = require('./easee')
 
 console.log('===========================================================')
 console.log('My Home Automation')
@@ -20,6 +21,8 @@ async function hourlyJob () {
     await updateWeather()
 
     await updateSensiboTemperature()
+
+    // await updateEaseeStatus() // todo: implement
 
     // TODO: updateTemperaturemeasure
 

@@ -15,7 +15,7 @@ exports.executeHeater = async function(simulation) {
         o.heaterOn
         ? {
             on: true,
-            targetTemperature: Math.ceil(o.sensiboTemperature + o.heaterOn * 5),
+            targetTemperature: Math.ceil(o.sensiboTemperature + o.heaterOn * 4),
             mode: 'heat',
             fanLevel: 'auto'
         } :
