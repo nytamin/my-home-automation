@@ -8,13 +8,12 @@ exports.updateShellyTemperature = async function () {
     const store = getStore()
 
     if (!store.shelly) store.shelly = {times: {}}
-    if (Date.now() - (store.shelly.lastUpdated || 0) > 0.5 * 3600 * 1000 || true) { // 1 hours
+    if (Date.now() - (store.shelly.lastUpdated || 0) > 0.5 * 3600 * 1000) { // 1 hours
 
         console.log('Updating Shelly temperature')
 
         // store.sensiboTemperatures.times = newTimes
         const temp = await getTemperature()
-        console.log('temp', temp)
         if (temp) {
 
             const d = new Date(temp.time)
@@ -44,8 +43,6 @@ async function getTemperature() {
         body: params
     })).json()
 
-    console.log(reply.data)
-    console.log(reply.data.device_status.tmp)
     if (
         reply.data &&
         reply.data.device_status &&
