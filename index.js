@@ -20,7 +20,7 @@ if (!fs.existsSync('./settings.js')) {
     const { updateWeather } = require('./weather')
     const { updateSensiboTemperature } = require('./sensibo')
     const { optimizeHeater } = require('./optimizer')
-    const { executeHeater } = require('./execute')
+    const { executeHeater, executeWaterHeater } = require('./execute')
     const { updateEaseeStatus } = require('./easee')
     const { updateShellyTemperature } = require('./shelly')
 
@@ -45,6 +45,7 @@ if (!fs.existsSync('./settings.js')) {
         const simulation = optimizeHeater()
 
         await executeHeater(simulation)
+        await executeWaterHeater(simulation)
 
         // Finally:
         updateStore()

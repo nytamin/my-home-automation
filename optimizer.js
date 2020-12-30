@@ -1,5 +1,6 @@
 const { getStore } = require('./dataStore')
 const { clone } = require('fast-clone')
+var dateFormat = require('dateformat')
 
 exports.optimizeHeater = function () {
 
@@ -7,11 +8,11 @@ exports.optimizeHeater = function () {
 
 
         minShellyTemperature: 19.0,
-        avgShellyTemperature: 18.5,
+        avgShellyTemperature: 15.5,
 
         minSensiboTemperature: 20,
         maxDaySensiboTemperature: 22,
-        maxNightSensiboTemperature: 24,
+        maxNightSensiboTemperature: 25,
         allowHeaterOn: (timeStr, sim) => {
             return (
                 (
@@ -96,7 +97,7 @@ exports.optimizeHeater = function () {
     for (const timeStr of Object.keys(simulation)) {
         const o = simulation[timeStr]
         out.push([
-            new Date(timeStr).toLocaleTimeString(),
+            dateFormat(new Date(timeStr), "HH:MM"),
             Math.round(o.sensiboTemperature * 10)/10,
             Math.round(o.shellyTemperature * 10)/10,
             o.heaterOn,
@@ -154,7 +155,7 @@ function prepareSimulation(fromDate, toDate) {
 
         // Finally:
         date = new Date(date.getTime() + 3600 * 1000) // advance an hour
-        if (date.getTime() > toDate.getTime()) break
+        if (date.getTime() >= toDate.getTime()) break
     }
 
     return preparedSimulation

@@ -1,6 +1,7 @@
 const { getStore } = require("./dataStore")
 const { getSensiboStatus, setSensibo } = require("./sensibo")
 const { enableActions } = require("./settings")
+const { getSmartPlugState, setSmartPlug } = require("./smartPlug")
 
 exports.executeHeater = async function(simulation) {
 
@@ -19,16 +20,15 @@ exports.executeHeater = async function(simulation) {
             mode: 'heat',
             fanLevel: 'auto'
         } :
-        o.sensiboTemperature > 23 // When it's hot, keep the fan on
+        o.sensiboTemperature > 22 // When it's hot, keep the fan on
         ? {
             on: true,
             mode: 'fan',
-            fanLevel: 'medium' // medium_low
+            fanLevel: o.sensiboTemperature > 23 ? 'medium' : 'medium_low' // medium_low
         }
         : {
             on: false,
         }
-
 
     const currentState = await getSensiboStatus()
     if (
@@ -49,6 +49,47 @@ exports.executeHeater = async function(simulation) {
             time: new Date().toISOString(),
             deviceType: 'sensibo',
             state: targetSensiboState,
+            reason: {
+                time: currentHour.toISOString(),
+                simulation: o
+            }
+        })
+    }
+}
+exports.executeWaterHeater = async function(simulation) {
+
+    const currentHour = new Date()
+    currentHour.setMinutes(0)
+    currentHour.setSeconds(0)
+    currentHour.setMilliseconds(0)
+
+    const o = simulation[currentHour.toISOString()]
+
+
+    const targetState = {
+        on: o.waterHeaterOn === 1
+    }
+
+    const currentState = await getSmartPlugState()
+
+    if (
+        !isEqual(currentState, targetState)
+    ) {
+        console.log('Setting waterheater state: ', targetState)
+        console.log('(was: ', currentState, ')')
+
+        if (enableActions   ) {
+            await setSmartPlug(
+                targetState.on
+            )
+        } else console.log('-- Actions are disabled --')
+
+        const store = getStore()
+        if (!store.actions) store.actions = []
+        store.actions.push({
+            time: new Date().toISOString(),
+            deviceType: 'waterheater',
+            state: targetState,
             reason: {
                 time: currentHour.toISOString(),
                 simulation: o

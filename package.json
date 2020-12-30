@@ -19,10 +19,14 @@
   },
   "homepage": "https://github.com/nytamin/my-home-automation#readme",
   "dependencies": {
+    "cheerio": "^1.0.0-rc.5",
     "cron": "^1.8.2",
+    "dateformat": "^4.4.1",
     "fast-clone": "^1.5.13",
     "html-extract-data": "^1.0.1",
     "node-fetch": "^2.6.1",
+    "puppeteer": "^5.5.0",
+    "tplink-smartplug-node": "^2.1.0",
     "xml-js": "^1.6.11"
   }
 }
