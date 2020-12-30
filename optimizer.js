@@ -80,7 +80,7 @@ exports.optimizeHeater = function () {
             new Date(timeStr).toLocaleTimeString(),
             Math.round(o.sensiboTemperature * 10)/10,
             o.heaterOn,
-            `${o.electricalPrice}${o.electricalPriceEstimated ? '*' : ''}`,
+            `${o.electricalPriceEstimated ? '*' : ''}${o.electricalPrice}`,
             o.outsideTemperature,
             o.outsideWind
         ])
@@ -110,8 +110,8 @@ function prepareSimulation(fromDate, toDate) {
         const electricPrice = getElectricalPrice(date)
 
         const o = {
-            outsideTemperature: forecast.temperature || null,
-            outsideWind: forecast.windSpeed || null,
+            outsideTemperature: forecast.temperature !== undefined ? forecast.temperature : null,
+            outsideWind: forecast.windSpeed !== undefined ? forecast.windSpeed : null ,
 
             sensiboTemperature: i === 0 ? getSensiboTemperature() : null,
 

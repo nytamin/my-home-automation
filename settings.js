@@ -18,4 +18,9 @@ exports.easee = {
     username: '', // tel-nr (ex: +467123456789)
     password: ''
 }
+exports.shelly = {
+    apiKey: '',
+    host: 'https://shelly-20-eu.shelly.cloud',
+    deviceId: ''
+}
 exports.enableActions = true
