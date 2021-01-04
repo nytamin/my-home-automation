@@ -29,18 +29,13 @@ if (!fs.existsSync('./settings.js')) {
     async function hourlyJob () {
         console.log('*** Hourly job ***')
 
-        // Update electrical prices:
-        await updateElecticalPrice()
-
-        await updateWeather()
-
         await updateSensiboTemperature()
+        await updateShellyTemperature()
 
         // await updateEaseeStatus() // todo: implement
 
         // TODO: updateTemperaturemeasure
 
-        await updateShellyTemperature()
 
         const simulation = optimizeHeater()
 
@@ -52,8 +47,24 @@ if (!fs.existsSync('./settings.js')) {
     }
 
     // Set up cron jobs:
-    var hourly = new Cron.CronJob('1 * * * *', () => {
+    const hourly = new Cron.CronJob('2 * * * *', () => {
         hourlyJob().catch(console.error)
-    }, undefined, true, 'Europe/Stockholm', undefined, true)
+    }, undefined, true, 'Europe/Stockholm', undefined, false)
+
+    new Cron.CronJob('1 15 * * *', () => {
+        updateElecticalPrice().catch(console.error)
+    }, undefined, true, 'Europe/Stockholm', undefined, false)
+
+    new Cron.CronJob('1 15 * * *', () => {
+        updateWeather().catch(console.error)
+    }, undefined, true, 'Europe/Stockholm', undefined, false)
+
+    const startup = async () => {
+        // On startup:
+        await updateElecticalPrice()
+        await updateWeather()
+        await hourlyJob()
+    }
+    startup().catch(console.error)
 }
 

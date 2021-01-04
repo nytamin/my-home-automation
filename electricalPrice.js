@@ -9,7 +9,7 @@ exports.updateElecticalPrice = async function () {
     if (
         !lastUpdated ||
         lastUpdated.getDate() !== new Date().getDate() ||  // Do a new check every midnight
-        Math.abs(Date.now() - lastUpdated.getTime()) > 6 * 3600 * 1000 // every 6 hours
+        Math.abs(Date.now() - lastUpdated.getTime()) > 6 * 3600 * 1000 // At least 6 hours has passed since last
     ) {
 
         console.log('Updating Electrical prices')

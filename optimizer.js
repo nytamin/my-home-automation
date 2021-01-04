@@ -7,11 +7,11 @@ exports.optimizeHeater = function () {
     const conditions = {
 
 
-        minShellyTemperature: 19.0,
-        avgShellyTemperature: 15.5,
+        minShellyTemperature: 18.0,
+        avgShellyTemperature: 19.0,
 
-        minSensiboTemperature: 20,
-        maxDaySensiboTemperature: 22,
+        minSensiboTemperature: 18,
+        maxDaySensiboTemperature: 23,
         maxNightSensiboTemperature: 25,
         allowHeaterOn: (timeStr, sim) => {
             return (
@@ -42,14 +42,19 @@ exports.optimizeHeater = function () {
     currentHour.setSeconds(0)
     currentHour.setMilliseconds(0)
 
+    const hoursBack = 24
     const hoursAhead = 24
 
-    const preparation = prepareSimulation(currentHour, new Date(currentHour.getTime() + hoursAhead * 3600 * 1000))
+    const startHour = new Date(currentHour.getTime() - hoursBack  * 3600 * 1000)
+    const endHour   = new Date(currentHour.getTime() + hoursAhead * 3600 * 1000)
+
+    const preparation = prepareSimulation(startHour, endHour, currentHour)
     let simulation
     let sum
 
+    const hourCount = Object.keys(preparation).length
     // Simulate and take action:
-    for (let i = 0; i<50; i++) {
+    for (let i = 0; i < hourCount * 10; i++) {
         // console.log('------------')
 
         simulation = simulateHouse(preparation)
@@ -74,20 +79,18 @@ exports.optimizeHeater = function () {
             }
         } else {
             // all good
-            console.log('OK')
-            console.log('sensiboTemperatureLow', Math.round(sum.sensiboTemperatureLow * 100)/100)
-            console.log('sensiboTemperatureAvg', Math.round(sum.sensiboTemperatureAvg * 100)/100)
-            console.log('shellyTemperatureLow', Math.round(sum.shellyTemperatureLow * 100)/100)
-            console.log('shellyTemperatureAvg', Math.round(sum.shellyTemperatureAvg * 100)/100)
             console.log('Optimization done!')
             break
         }
     }
+    console.log(`sensiboTemperatureLow ${round(sum.sensiboTemperatureLow)} (min: ${round(conditions.minSensiboTemperature)})`)
+    console.log(`sensiboTemperatureAvg ${round(sum.sensiboTemperatureAvg)} (min: ${round(conditions.avgSensiboTemperature)})`)
+    console.log(`shellyTemperatureLow  ${round(sum.shellyTemperatureLow) } (min: ${round(conditions.minShellyTemperature)})`)
+    console.log(`shellyTemperatureAvg  ${round(sum.shellyTemperatureAvg) } (min: ${round(conditions.avgShellyTemperature)})`)
 
-    // Water heare
-    for (let i = 0; i< hoursAhead / 2; i++) {
-        turnOnWaterHeaterSomeTime(preparation)
-    }
+    // Water heater:
+    turnOnWaterHeater(preparation, startHour, endHour)
+
 
     // Finally, update the sime once more.
     simulation = simulateHouse(preparation)
@@ -96,25 +99,38 @@ exports.optimizeHeater = function () {
     const out = [['Time', 'Sensibo', 'Temp', 'Heat', 'Price', 'Outside', 'W.Heat']]
     for (const timeStr of Object.keys(simulation)) {
         const o = simulation[timeStr]
+        if (timeStr === currentHour.toISOString()) {
+            out.push([])
+        }
         out.push([
-            dateFormat(new Date(timeStr), "HH:MM"),
-            Math.round(o.sensiboTemperature * 10)/10,
-            Math.round(o.shellyTemperature * 10)/10,
-            o.heaterOn,
-            `${o.electricalPriceEstimated ? '*' : ''}${o.electricalPrice}`,
+            dateFormat(new Date(timeStr), hourCount <= 48 ? 'HH:MM' : 'yyyy-mm-dd HH:MM'),
+            // dateFormat(new Date(timeStr), "HH:MM"),
+            formatV(o.sensiboTemperature, o.sensiboTemperatureEstimated),
+            formatV(o.shellyTemperature, o.shellyTemperatureEstimated),
+            round(o.heaterOn),
+            formatV(o.electricalPrice, o.electricalPriceEstimated),
             `${o.outsideTemperature} (${o.outsideWind})`,
-            o.waterHeaterOn
+            o.waterHeaterOn,
         ])
     }
     console.table(out)
 
-    console.log('Sum cost', sum.cost)
+    console.log('Sum cost', round(sum.cost))
 
     return simulation
 
 }
 
-function prepareSimulation(fromDate, toDate) {
+function formatV(val, valEst) {
+    if (val === null) return null
+    else if (valEst) return `*${round(val)}`
+    else return round(val)
+}
+function round(v) {
+    return Math.round(v * 10)/10
+}
+
+function prepareSimulation(fromDate, toDate, currentHour) {
 
     const preparedSimulation = {
     }
@@ -123,27 +139,36 @@ function prepareSimulation(fromDate, toDate) {
     date.setMinutes(0)
     date.setSeconds(0)
     date.setMilliseconds(0)
-    for (let i = 0; i< 100; i++) {
 
+
+    for (let i = 0; i < 1000; i++) {
+
+        const inThePast = date.getTime() < currentHour.getTime()
+        const inThePastOrNow = date.getTime() <= currentHour.getTime()
 
         const forecast = getForecast(date)
 
         const electricPrice = getElectricalPrice(date)
 
         const o = {
+            toOptimize: !inThePast,
+
             outsideTemperature: forecast.temperature !== undefined ? forecast.temperature : null,
             outsideWind: forecast.windSpeed !== undefined ? forecast.windSpeed : null ,
 
-            sensiboTemperature: i === 0 ? getSensiboTemperature() : null,
-
-            shellyTemperature: i === 0 ? getShellyTemperature() : null,
+            sensiboTemperature: inThePastOrNow ? getSensiboTemperature(date) : null,
+            shellyTemperature: inThePastOrNow ? getShellyTemperature(date, i === 0) : null,
 
             electricalPrice: electricPrice.price,
             electricalPriceEstimated: electricPrice.estimated,
 
-            heaterOn: 0,
-            waterHeaterOn: 0,
-            cost: null
+            heaterOn: null,
+            waterHeaterOn: null,
+            otherHeatersOn: 0,
+            cost: null,
+
+            sensiboTemperature2: i === 0 ? getSensiboTemperature(date) : null,
+            shellyTemperature2: i === 0 ? getShellyTemperature(date, i === 0) : null,
         }
 
         // overrider, temp:
@@ -156,6 +181,54 @@ function prepareSimulation(fromDate, toDate) {
         // Finally:
         date = new Date(date.getTime() + 3600 * 1000) // advance an hour
         if (date.getTime() >= toDate.getTime()) break
+    }
+
+    // Fill in history:
+    const store = getStore()
+    for (const action of store.actions) {
+
+        const o = preparedSimulation[action.reason.time]
+        if (o) {
+            o.heaterOn = action.reason.simulation.heaterOn
+            o.waterHeaterOn = action.reason.simulation.waterHeaterOn
+        }
+    }
+
+    // Fill in some gaps:
+    const keys  = Object.keys(preparedSimulation)
+    for (let i = 0; i < keys.length; i++) {
+
+        const prev    = preparedSimulation[keys[i-1]]
+        const current = preparedSimulation[keys[i]]
+        const next    = preparedSimulation[keys[i+1]]
+
+        if (current.outsideTemperature === null) {
+            current.outsideTemperature = (
+                prev && prev.outsideTemperature !== null
+                ? prev.outsideTemperature
+                : next && next.outsideTemperature !== null
+                ? next.outsideTemperature
+                : null
+            )
+        }
+
+        if (current.outsideWind === null) {
+            current.outsideWind = (
+                  prev && prev.outsideWind !== null
+                ? prev.outsideWind
+                : next && next.outsideWind !== null
+                ? next.outsideWind
+                : null
+            )
+        }
+
+        if (current.waterHeaterOn === null && !current.toOptimize) {
+            current.waterHeaterOn = (
+                  prev && prev.waterHeaterOn !== null
+                ? prev.waterHeaterOn
+                : null
+            )
+        }
     }
 
     return preparedSimulation
@@ -199,19 +272,57 @@ function getForecast(date) {
     const store = getStore()
     return store.weather.forecasts[date.toISOString()] || {}
 }
-function getSensiboTemperature() {
+function getSensiboTemperature(date) {
     const store = getStore()
+
     const times = Object.keys(store.sensiboTemperatures.times).map(timeStr => new Date(timeStr).getTime()).sort((a, b) => a-b)
 
-    const lastTimeStr = new Date(times[times.length -1]).toISOString()
-    return store.sensiboTemperatures.times[lastTimeStr]
+    let mostRecent = undefined
+    for (const time of times) {
+        if (time <= date.getTime()) {
+            mostRecent = store.sensiboTemperatures.times[new Date(time).toISOString()]
+        }
+    }
+    if (mostRecent !== undefined) return mostRecent
+
+    // const exact = store.sensiboTemperatures.times[date.toISOString()]
+    // if (exact !== undefined) return exact
+
+    // if (tryToFindLast) {
+
+
+    //     const lastTimeStr = new Date(times[times.length -1]).toISOString()
+    //     return store.sensiboTemperatures.times[lastTimeStr]
+    // }
+    return null
 }
-function getShellyTemperature() {
+function getShellyTemperature(date, useAnyPrevious ) {
     const store = getStore()
+
     const times = Object.keys(store.shelly.times).map(timeStr => new Date(timeStr).getTime()).sort((a, b) => a-b)
 
-    const lastTimeStr = new Date(times[times.length -1]).toISOString()
-    return store.shelly.times[lastTimeStr].temperature
+    let mostRecent = undefined
+    for (const time of times) {
+        if (
+            ( useAnyPrevious && time <= date.getTime() ) ||
+            (!useAnyPrevious && time === date.getTime() )
+        ) {
+            const o = store.shelly.times[new Date(time).toISOString()]
+            // if (useAnyPrevious || Math.abs(new Date(o.time).getTime() -   )
+            mostRecent = o.temperature
+        }
+    }
+    if (mostRecent !== undefined) return mostRecent
+
+    // const exact = store.shelly.times[date.toISOString()]
+    // if (exact) return exact.temperature
+
+    // if (tryToFindLast) {
+
+    //     const lastTimeStr = new Date(times[times.length -1]).toISOString()
+    //     return store.shelly.times[lastTimeStr].temperature
+    // }
+    return null
 }
 
 function simulateHouse(preparation) {
@@ -225,10 +336,13 @@ function simulateHouse(preparation) {
     const houseSize = 8
     const heaterGainTemp = heaterPower * 4 / houseSize // ~1.2 degree / hour
     const otherHeaterGainTemp = otherHeaterPower * 1 / houseSize
-    const firePlaceGainTemp = 8 / houseSize // 0.9 degree / hour
+    const firePlaceGainTemp = 10 / houseSize // 0.9 degree / hour
 
     let first = true
     let prev = null
+    let prev2 = null
+    let prev3 = null
+    let prev4 = null
     for (const dateStr of Object.keys(sim)) {
         const date = new Date(dateStr)
         const o = sim[dateStr]
@@ -240,37 +354,56 @@ function simulateHouse(preparation) {
         // heaterOn
         // waterHeaterOn
 
-        if (o.sensiboTemperature === null && prev) {
+        o.fireplaceOn = (
+            [7,8,9,10,11,15,16,17,18,19,20, 21].includes(date.getHours()) && (!prev || prev.sensiboTemperature < 24)
+            ? 1
+            : 0
+        )
 
-            {
-                // Downstairs:
 
-                o.fireplaceOn = (
-                    [8,9,10,11,17,18,19,20,21].includes(date.getHours()) &&
-                    prev.sensiboTemperature < 23
-                ) ? 1 : 0
+        o.otherHeatersOn = (
+            prev && prev.shellyTemperature !== null
+            ? Math.min(Math.max((17 - prev.shellyTemperature) / 7, 0), 1)
+            : 0
+        )
 
-                const heaterGain = o.heaterOn * heaterGainTemp
-                const fireplaceGain = o.fireplaceOn * firePlaceGainTemp
+        if (o.sensiboTemperature === null && prev && prev.sensiboTemperature !== null) {
 
-                const heatLoss     = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * -0.04
-                const heatLossWind = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * Math.log(prev.outsideWind + 5) * -0.07
 
-                o.sensiboTemperature = prev.sensiboTemperature + (
-                    heaterGain +
-                    fireplaceGain +
-                    heatLoss +
-                    heatLossWind
-                )
-            }
+            const firePlaceOnSlow = smartAvg([
+                o && o.fireplaceOn,
+                prev && prev.fireplaceOn,
+                prev2 && prev2.fireplaceOn,
+                // prev3 && prev3.fireplaceOn,
+                // prev4 && prev4.fireplaceOn,
+            ])
+
+            // Downstairs:
+
+            const heaterGain = prev.heaterOn * heaterGainTemp
+            const fireplaceGain = firePlaceOnSlow * firePlaceGainTemp
+
+            const heatLoss     = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * -0.04
+            const heatLossWind = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * Math.log(prev.outsideWind + 2) * -0.05
+
+            o.sensiboTemperature = prev.sensiboTemperature + (
+                heaterGain +
+                fireplaceGain +
+                heatLoss +
+                heatLossWind
+            )
+            o.sensiboTemperatureEstimated = true
+
+        }
+        if (o.shellyTemperature === null && prev && prev.shellyTemperature !== null) {
             {
                 // Upstairs:
-                o.otherHeatersOn = Math.min(Math.max((17 - prev.shellyTemperature) / 7, 0), 1)
+
                 const otherHeaterGain = o.otherHeatersOn * otherHeaterGainTemp
 
-                const heatLoss     = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * -0.02
-                const heatLossWind = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * Math.log(prev.outsideWind + 5) * -0.03
-                const heatTransfer = -(prev.shellyTemperature - prev.sensiboTemperature) * 0.12
+                const heatLoss     = Math.pow(((prev.shellyTemperature - prev.outsideTemperature) * 0.1), 2) * -0.04
+                const heatLossWind = Math.pow(((prev.shellyTemperature - prev.outsideTemperature) * 0.1), 2) * Math.log(prev.outsideWind + 2) * -0.03
+                const heatTransfer = -(prev.shellyTemperature - prev.sensiboTemperature) * 0.13
                 // const heaterGain = o.heaterOn * heaterGainTemp
 
                 o.shellyTemperature = prev.shellyTemperature + (
@@ -279,18 +412,22 @@ function simulateHouse(preparation) {
                     heatLossWind +
                     heatTransfer
                 )
+                o.shellyTemperatureEstimated = true
 
             }
-
-            o.cost = (
-                o.heaterOn * heaterPower * electricalCost +
-                o.otherHeatersOn * otherHeaterPower * electricalCost +
-                o.waterHeaterOn * waterHeaterPower * electricalCost
-            )
         }
+
+        o.cost = (
+            o.heaterOn * heaterPower * electricalCost +
+            o.otherHeatersOn * otherHeaterPower * electricalCost +
+            o.waterHeaterOn * waterHeaterPower * electricalCost
+        )
 
 
         // Finally:
+        prev4 = prev3
+        prev3 = prev2
+        prev2 = prev
         prev = o
     }
     return sim
@@ -308,24 +445,33 @@ function summarize (sim) {
         shellyTemperatureLow: Number.POSITIVE_INFINITY,
         shellyTemperatureHigh: Number.NEGATIVE_INFINITY
     }
-    let i = 0
+    let sensibo_i = 0
+    let shelly_i = 0
     for (const timeStr of Object.keys(sim)){
         const o = sim[timeStr]
-        i++
-        sum.cost += o.cost
-        sum.sensiboTemperatureEnd = o.sensiboTemperature
-        sum.sensiboTemperatureAvg += o.sensiboTemperature
-        sum.sensiboTemperatureLow = Math.min(sum.sensiboTemperatureLow, o.sensiboTemperature)
-        sum.sensiboTemperatureHigh = Math.max(sum.sensiboTemperatureHigh, o.sensiboTemperature)
+        if (o.toOptimize) {
+            sum.cost += o.cost
+            sum.sensiboTemperatureEnd = o.sensiboTemperature
+            if (o.sensiboTemperature) {
+                sum.sensiboTemperatureAvg += o.sensiboTemperature
+                sensibo_i++
+            }
+            if(o.sensiboTemperature) sum.sensiboTemperatureLow = Math.min(sum.sensiboTemperatureLow, o.sensiboTemperature)
+            if(o.sensiboTemperature) sum.sensiboTemperatureHigh = Math.max(sum.sensiboTemperatureHigh, o.sensiboTemperature)
 
-        sum.shellyTemperatureEnd = o.shellyTemperature
-        sum.shellyTemperatureAvg += o.shellyTemperature
-        sum.shellyTemperatureLow = Math.min(sum.shellyTemperatureLow, o.shellyTemperature)
-        sum.shellyTemperatureHigh = Math.max(sum.shellyTemperatureHigh, o.shellyTemperature)
+            sum.shellyTemperatureEnd = o.shellyTemperature
+            if (o.shellyTemperature) {
+                sum.shellyTemperatureAvg += o.shellyTemperature
+                shelly_i++
+            }
+            if(o.shellyTemperature) sum.shellyTemperatureLow = Math.min(sum.shellyTemperatureLow, o.shellyTemperature)
+            if(o.shellyTemperature) sum.shellyTemperatureHigh = Math.max(sum.shellyTemperatureHigh, o.shellyTemperature)
+        }
+
 
     }
-    sum.sensiboTemperatureAvg /= i
-    sum.shellyTemperatureAvg /= i
+    if (sensibo_i) sum.sensiboTemperatureAvg /= sensibo_i
+    if (shelly_i) sum.shellyTemperatureAvg /= shelly_i
     return sum
 }
 function turnOnHeaterSomeTime(preparation, simulation, conditions) {
@@ -337,14 +483,16 @@ function turnOnHeaterSomeTime(preparation, simulation, conditions) {
         const sim = simulation[timeStr]
 
         if (
+            o.toOptimize &&
             o.heaterOn < 1 &&
             conditions.allowHeaterOn(timeStr, sim)
         ) {
             const factor = (conditions.preferFactor && conditions.preferFactor(timeStr, sim)) || 1
             let cost = o.electricalPrice
             if (cost === null) cost = 9999 + sim.sensiboTemperature
-
             cost *= factor
+            const factor2 = 1 + Math.pow(o.heaterOn, 2) * 0.3
+            cost *= factor2
             if (cost < lowestCost) {
                 lowestCost = cost
                 lowestCostTimeStr = timeStr
@@ -353,36 +501,66 @@ function turnOnHeaterSomeTime(preparation, simulation, conditions) {
 
     }
     if (lowestCostTimeStr) {
-        preparation[lowestCostTimeStr].heaterOn += 0.25
+        preparation[lowestCostTimeStr].heaterOn += 0.2
 
         return true
     } else {
         return false // unable, bail out
     }
 }
-function turnOnWaterHeaterSomeTime(preparation) {
+function turnOnWaterHeater(preparation, startHour, endHour) {
 
-    let lowestCost = Number.POSITIVE_INFINITY
-    let lowestCostTimeStr = null
-    for (const timeStr of Object.keys(preparation)) {
-        const o = preparation[timeStr]
-
-        if (
-            o.waterHeaterOn !== 1
-        ) {
-            let cost = o.electricalPrice
-            if (cost < lowestCost) {
-                lowestCost = cost
-                lowestCostTimeStr = timeStr
+    // To ensure that it runs fairly often, simply pick the cheapest hours every 8 hours:
+    let waterHeaterStartHour = new Date(startHour)
+    waterHeaterStartHour.setHours(0)
+    const waterHeaterHourPeriod = 6
+    const waterHeaterOnFactor = 3 / 6
+    while (waterHeaterStartHour.getTime() < endHour.getTime()) {
+        let costs = []
+        for (let i = 0; i< waterHeaterHourPeriod; i++) {
+            const date = new Date(waterHeaterStartHour.getTime() + i * 3600 * 1000)
+            const o = preparation[date.toISOString()]
+            if (o && o.electricalPrice !== null) {
+                costs.push({
+                    price: o.electricalPrice,
+                    timeStr: date.toISOString()
+                })
+            }
+        }
+        costs.sort((a, b) => {
+            // lowest first
+            if (a.price > b.price) return 1
+            if (a.price < b.price) return -1
+            return 0
+        })
+        for (const cost of costs) {
+            const o = preparation[cost.timeStr]
+            if (o.waterHeaterOn === null) {
+                o.waterHeaterOn = 0
+            }
+        }
+        costs = costs.slice(0, Math.round(costs.length * waterHeaterOnFactor))
+        for (const cost of costs) {
+            const o = preparation[cost.timeStr]
+            if (o.toOptimize) {
+                o.waterHeaterOn = 1
             }
         }
 
+        // Finally:
+        waterHeaterStartHour = new Date(waterHeaterStartHour.getTime() + waterHeaterHourPeriod * 3600 * 1000)
     }
-    if (lowestCostTimeStr) {
-        preparation[lowestCostTimeStr].waterHeaterOn = 1
-
-        return true
-    } else {
-        return false // unable, bail out
+}
+function smartAvg(values) {
+    let i = 0
+    let sum = 0
+    for (const value of values) {
+        if (value !== undefined && value !== null && value !== false) {
+            sum += value
+            i++
+        }
     }
+    if (i > 0) {
+        return sum / i
+    } else return 0
 }

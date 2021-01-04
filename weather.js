@@ -9,7 +9,7 @@ const { getStore } = require('./dataStore')
 exports.updateWeather = async function () {
     const store = getStore()
     if (!store.weather) store.weather = {forecasts: {}}
-    if (Date.now() - (store.weather.lastUpdated || 0) > 6 * 3600 * 1000) { // 6 hours
+    if (Date.now() - (store.weather.lastUpdated || 0) > 6 * 3600 * 1000) { // At least 6 hours has passed since last check
 
         console.log('Updating Weather forecast')
 
