@@ -55,11 +55,16 @@ if (!fs.existsSync('./settings.js')) {
         updateElecticalPrice().catch(console.error)
     }, undefined, true, 'Europe/Stockholm', undefined, false)
 
+    new Cron.CronJob('1 21 * * *', () => {
+        updateElecticalPrice().catch(console.error)
+    }, undefined, true, 'Europe/Stockholm', undefined, false)
+
     new Cron.CronJob('1 15 * * *', () => {
         updateWeather().catch(console.error)
     }, undefined, true, 'Europe/Stockholm', undefined, false)
 
     const startup = async () => {
+        console.log('*** On startup ***')
         // On startup:
         await updateElecticalPrice()
         await updateWeather()

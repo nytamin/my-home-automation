@@ -13,22 +13,35 @@ exports.optimizeHeater = function () {
         minSensiboTemperature: 18,
         maxDaySensiboTemperature: 23,
         maxNightSensiboTemperature: 25,
-        allowHeaterOn: (timeStr, sim) => {
+        allowHeaterOn: (timeStr, sim, simNext) => {
+            const isNight = (
+                new Date(timeStr).getHours() >= 21 ||
+                new Date(timeStr).getHours() <= 5
+            )
+            let nextTemp = (simNext ? simNext.sensiboTemperature : sim.sensiboTemperature) || 0
             return (
                 (
-                    new Date(timeStr).getHours() >= 22 ||
-                    new Date(timeStr).getHours() < 5 ||
-                    sim.sensiboTemperature < conditions.maxDaySensiboTemperature
-                ) &&
-                sim.sensiboTemperature < conditions.maxNightSensiboTemperature
+                    (
+                        !isNight &&
+                        nextTemp < conditions.maxDaySensiboTemperature
+                    ) || (
+                        isNight &&
+                        nextTemp < conditions.maxNightSensiboTemperature
+                    )
+                ) && (
+                    isNight ||
+                    sim.heaterOn < 0.8
+
+                )
             )
         },
         preferFactor: (timeStr, sim) => {
+            const isNight = (
+                new Date(timeStr).getHours() >= 22 ||
+                new Date(timeStr).getHours() <= 5
+            )
             return (
-                (
-                    new Date(timeStr).getHours() >= 22 ||
-                    new Date(timeStr).getHours() < 6
-                )
+                isNight
                 ? 0.9 // "90%" of the cost
                 : 1
             )
@@ -127,6 +140,7 @@ function formatV(val, valEst) {
     else return round(val)
 }
 function round(v) {
+    if (!v) return v
     return Math.round(v * 10)/10
 }
 
@@ -222,6 +236,13 @@ function prepareSimulation(fromDate, toDate, currentHour) {
             )
         }
 
+        if (current.heaterOn === null && !current.toOptimize) {
+            current.heaterOn = (
+                  prev && prev.heaterOn !== null
+                ? prev.heaterOn
+                : null
+            )
+        }
         if (current.waterHeaterOn === null && !current.toOptimize) {
             current.waterHeaterOn = (
                   prev && prev.waterHeaterOn !== null
@@ -277,24 +298,18 @@ function getSensiboTemperature(date) {
 
     const times = Object.keys(store.sensiboTemperatures.times).map(timeStr => new Date(timeStr).getTime()).sort((a, b) => a-b)
 
-    let mostRecent = undefined
+    let value = null
     for (const time of times) {
-        if (time <= date.getTime()) {
-            mostRecent = store.sensiboTemperatures.times[new Date(time).toISOString()]
+        const d = new Date(time)
+        if (
+            d.getHours() === date.getHours()
+            // time > date.getTime()
+        ) {
+            value = store.sensiboTemperatures.times[new Date(time).toISOString()]
+            break
         }
     }
-    if (mostRecent !== undefined) return mostRecent
-
-    // const exact = store.sensiboTemperatures.times[date.toISOString()]
-    // if (exact !== undefined) return exact
-
-    // if (tryToFindLast) {
-
-
-    //     const lastTimeStr = new Date(times[times.length -1]).toISOString()
-    //     return store.sensiboTemperatures.times[lastTimeStr]
-    // }
-    return null
+    return value
 }
 function getShellyTemperature(date, useAnyPrevious ) {
     const store = getStore()
@@ -333,7 +348,7 @@ function simulateHouse(preparation) {
     const waterHeaterPower = 1.0// kw
     const otherHeaterPower = 6 // kw
 
-    const houseSize = 8
+    const houseSize = 7
     const heaterGainTemp = heaterPower * 4 / houseSize // ~1.2 degree / hour
     const otherHeaterGainTemp = otherHeaterPower * 1 / houseSize
     const firePlaceGainTemp = 10 / houseSize // 0.9 degree / hour
@@ -363,7 +378,7 @@ function simulateHouse(preparation) {
 
         o.otherHeatersOn = (
             prev && prev.shellyTemperature !== null
-            ? Math.min(Math.max((17 - prev.shellyTemperature) / 7, 0), 1)
+            ? Math.min(Math.max((15 - prev.shellyTemperature) / 7, 0), 1)
             : 0
         )
 
@@ -385,12 +400,14 @@ function simulateHouse(preparation) {
 
             const heatLoss     = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * -0.04
             const heatLossWind = Math.pow(((prev.sensiboTemperature - prev.outsideTemperature) * 0.1), 2) * Math.log(prev.outsideWind + 2) * -0.05
+            const heatTransfer = (prev.shellyTemperature - prev.sensiboTemperature) * 0.15
 
             o.sensiboTemperature = prev.sensiboTemperature + (
                 heaterGain +
                 fireplaceGain +
                 heatLoss +
-                heatLossWind
+                heatLossWind +
+                heatTransfer
             )
             o.sensiboTemperatureEstimated = true
 
@@ -401,13 +418,13 @@ function simulateHouse(preparation) {
 
                 const otherHeaterGain = o.otherHeatersOn * otherHeaterGainTemp
 
-                const heatLoss     = Math.pow(((prev.shellyTemperature - prev.outsideTemperature) * 0.1), 2) * -0.04
+                const heatLoss     = Math.pow(((prev.shellyTemperature - prev.outsideTemperature) * 0.1), 2) * -0.05
                 const heatLossWind = Math.pow(((prev.shellyTemperature - prev.outsideTemperature) * 0.1), 2) * Math.log(prev.outsideWind + 2) * -0.03
-                const heatTransfer = -(prev.shellyTemperature - prev.sensiboTemperature) * 0.13
+                const heatTransfer = -(prev.shellyTemperature - prev.sensiboTemperature) * 0.14
                 // const heaterGain = o.heaterOn * heaterGainTemp
 
                 o.shellyTemperature = prev.shellyTemperature + (
-                    // otherHeaterGain +
+                    otherHeaterGain +
                     heatLoss +
                     heatLossWind +
                     heatTransfer
@@ -478,16 +495,20 @@ function turnOnHeaterSomeTime(preparation, simulation, conditions) {
 
     let lowestCost = Number.POSITIVE_INFINITY
     let lowestCostTimeStr = null
-    for (const timeStr of Object.keys(preparation)) {
+    const keys = Object.keys(preparation)
+    for (let i = 0; i < keys.length; i++) {
+        const timeStr = keys[i]
         const o = preparation[timeStr]
         const sim = simulation[timeStr]
+        const timeStrNext = keys[i + 1]
+        const simNext = timeStrNext && simulation[timeStrNext]
 
         if (
             o.toOptimize &&
             o.heaterOn < 1 &&
-            conditions.allowHeaterOn(timeStr, sim)
+            conditions.allowHeaterOn(timeStr, sim, simNext)
         ) {
-            const factor = (conditions.preferFactor && conditions.preferFactor(timeStr, sim)) || 1
+            const factor = (conditions.preferFactor && conditions.preferFactor(timeStr, sim, simNext)) || 1
             let cost = o.electricalPrice
             if (cost === null) cost = 9999 + sim.sensiboTemperature
             cost *= factor
